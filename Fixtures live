@@ -1,0 +1,556 @@
+
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Soccer Matches</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bs-dark: #212529;
+            --bs-secondary: #6c757d;
+            --bs-info: #0dcaf0;
+            --bs-success: #198754;
+            --bs-warning: #ffc107;
+            --bs-danger: #dc3545;
+            --bs-light: #f8f9fa;
+            --bs-border-color: #495057;
+        }
+        
+        body {
+            background-color: #1a1d23;
+            color: #e9ecef;
+        }
+        
+        .match-card {
+            background-color: var(--bs-dark);
+            border: 1px solid var(--bs-border-color);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            margin-bottom: 1rem;
+        }
+        
+        .match-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        }
+        
+        .teams-section {
+            border-left: 3px solid var(--bs-info);
+            padding-left: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .team-row {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #495057;
+        }
+        
+        .team-row:last-child {
+            border-bottom: none;
+        }
+        
+        .score .badge {
+            min-width: 2rem;
+            font-size: 0.9rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .error {
+            background-color: rgba(220, 53, 69, 0.1);
+            border: 1px solid var(--bs-danger);
+            color: #f8d7da;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin: 1rem 0;
+        }
+        
+        .filter-btn {
+            transition: all 0.3s ease;
+            border-color: var(--bs-info);
+            color: var(--bs-info);
+            margin: 0.25rem;
+            background-color: transparent;
+        }
+        
+        .filter-btn.active {
+            background-color: var(--bs-info);
+            border-color: var(--bs-info);
+            color: #000;
+        }
+        
+        .filter-btn:hover:not(.active) {
+            background-color: rgba(13, 202, 240, 0.1);
+            border-color: var(--bs-info);
+            color: var(--bs-info);
+        }
+        
+        .league-section {
+            margin-bottom: 2rem;
+        }
+        
+        .league-header {
+            background: var(--bs-dark);
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--bs-border-color);
+        }
+        
+        .badge {
+            font-size: 0.75rem;
+        }
+        
+        .badge.bg-success {
+            background-color: var(--bs-success) !important;
+        }
+        
+        .badge.bg-warning {
+            background-color: var(--bs-warning) !important;
+            color: #000 !important;
+        }
+        
+        .badge.bg-info {
+            background-color: var(--bs-info) !important;
+            color: #000 !important;
+        }
+        
+        .badge.bg-secondary {
+            background-color: var(--bs-secondary) !important;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .match-card {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .spinner-border {
+            color: var(--bs-info);
+        }
+        
+        @media (max-width: 768px) {
+            .filter-btn {
+                font-size: 0.875rem;
+                padding: 0.5rem 0.75rem;
+            }
+            
+            .league-name {
+                font-size: 0.9rem;
+            }
+        }
+        
+        .api-status {
+            background: rgba(13, 202, 240, 0.1);
+            border: 1px solid var(--bs-info);
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <h1 class="display-6 mb-2">
+                <i class="fas fa-futbol me-2 text-info"></i>
+                Live Soccer Matches
+            </h1>
+            <p class="text-muted">Real-time data from ESPN Soccer API</p>
+            <div id="lastUpdated" class="text-muted small"></div>
+        </div>
+
+        <!-- API Status -->
+        <div class="api-status text-center">
+            <small class="text-info">
+                <i class="fas fa-broadcast-tower me-1"></i>
+                Direct ESPN API Connection • No External Dependencies
+            </small>
+        </div>
+
+        <!-- Filter Buttons -->
+        <div class="text-center mb-4">
+            <button class="btn btn-outline-info btn-sm filter-btn active" data-filter="all">
+                <i class="fas fa-globe me-1"></i>All Leagues
+            </button>
+            <button class="btn btn-outline-info btn-sm filter-btn" data-filter="top">
+                <i class="fas fa-star me-1"></i>Top 5 Leagues
+            </button>
+            <button class="btn btn-outline-info btn-sm filter-btn" data-filter="live">
+                <i class="fas fa-broadcast-tower me-1"></i>Live Only
+            </button>
+            <button class="btn btn-outline-info btn-sm filter-btn" data-filter="recent">
+                <i class="fas fa-clock me-1"></i>Recent
+            </button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Fetching live soccer matches from ESPN...</p>
+            <small class="text-muted">Loading 25+ leagues worldwide</small>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="error d-none">
+            <h5><i class="fas fa-exclamation-triangle me-2"></i>Unable to Load Data</h5>
+            <p>There was an error fetching the latest soccer matches. This might be due to CORS restrictions.</p>
+            <button onclick="loadMatches()" class="btn btn-outline-danger btn-sm">
+                <i class="fas fa-redo me-1"></i>Try Again
+            </button>
+        </div>
+
+        <!-- Matches Container -->
+        <div id="matchesContainer" class="d-none">
+            <!-- Matches will be loaded here -->
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-5 pt-4" style="border-top: 1px solid var(--bs-border-color);">
+            <p class="text-muted small">
+                <i class="fas fa-info-circle me-1"></i>
+                Data sourced directly from ESPN Soccer API • Updates every 10 minutes
+            </p>
+            <p class="text-muted small">
+                <i class="fas fa-link me-1"></i>
+                Hosted on: <a href="https://vicecaptaine.blogspot.com/p/live-soccer-matches.html" class="text-info">vicecaptaine.blogspot.com</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configuration
+        const BLOGGER_URL = 'https://vicecaptaine.blogspot.com/p/live-soccer-matches.html';
+        
+        // Soccer leagues to fetch
+        const LEAGUES = {
+            'eng.1': 'Premier League',
+            'esp.1': 'La Liga',
+            'ita.1': 'Serie A',
+            'ger.1': 'Bundesliga',
+            'fra.1': 'Ligue 1',
+            'usa.1': 'MLS',
+            'uefa.champions': 'Champions League',
+            'uefa.europa': 'Europa League',
+            'bra.1': 'Brazilian Serie A',
+            'arg.1': 'Argentine Primera División',
+            'ned.1': 'Eredivisie',
+            'por.1': 'Primeira Liga',
+            'uefa.nations': 'UEFA Nations League',
+            'conmebol.america': 'Copa América',
+            'concacaf.gold': 'CONCACAF Gold Cup',
+            'club.friendly': 'Club Friendlies',
+            'eng.2': 'Championship',
+            'esp.2': 'Segunda División',
+            'ita.2': 'Serie B',
+            'ger.2': 'Bundesliga 2'
+        };
+        
+        let allMatches = [];
+        let currentFilter = 'all';
+        
+        // Top 5 leagues for filtering
+        const TOP_LEAGUES = [
+            'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'
+        ];
+
+        // CORS proxy services for ESPN API
+        const CORS_PROXIES = [
+            'https://api.allorigins.win/get?url=',
+            'https://corsproxy.io/?',
+            'https://cors-anywhere.herokuapp.com/'
+        ];
+        
+        let currentProxyIndex = 0;
+
+        async function fetchWithCORS(url) {
+            for (let i = 0; i < CORS_PROXIES.length; i++) {
+                try {
+                    const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(url);
+                    const response = await fetch(proxyUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Handle different proxy response formats
+                    if (data.contents) {
+                        return JSON.parse(data.contents); // allorigins
+                    } else if (typeof data === 'object') {
+                        return data; // direct proxy
+                    } else {
+                        throw new Error('Invalid response format');
+                    }
+                } catch (error) {
+                    console.warn(`Proxy ${currentProxyIndex} failed:`, error);
+                    currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
+                    
+                    if (i === CORS_PROXIES.length - 1) {
+                        throw new Error('All CORS proxies failed');
+                    }
+                }
+            }
+        }
+
+        async function fetchLeagueMatches(leagueId, leagueName) {
+            try {
+                const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueId}/scoreboard`;
+                const data = await fetchWithCORS(url);
+                
+                const events = data.events || [];
+                const matches = [];
+                const today = new Date();
+                
+                events.forEach(match => {
+                    try {
+                        const matchDate = new Date(match.date);
+                        const daysDiff = Math.abs((today - matchDate) / (1000 * 60 * 60 * 24));
+                        
+                        // Include matches within 3 days
+                        if (daysDiff <= 3) {
+                            const competition = match.competitions[0];
+                            const competitors = competition.competitors;
+                            
+                            const homeTeam = competitors.find(c => c.homeAway === 'home');
+                            const awayTeam = competitors.find(c => c.homeAway === 'away');
+                            
+                            if (homeTeam && awayTeam) {
+                                matches.push({
+                                    id: match.id,
+                                    league: leagueName,
+                                    team1: homeTeam.team.shortDisplayName,
+                                    team2: awayTeam.team.shortDisplayName,
+                                    score: `${homeTeam.score || '0'} - ${awayTeam.score || '0'}`,
+                                    status: match.status.type.description,
+                                    time: match.date,
+                                    completed: match.status.type.completed,
+                                    link: `https://www.espn.com/soccer/match/_/gameId/${match.id}`,
+                                    venue: competition.venue?.fullName || 'TBD'
+                                });
+                            }
+                        }
+                    } catch (err) {
+                        console.warn(`Error processing match in ${leagueId}:`, err);
+                    }
+                });
+                
+                return matches;
+            } catch (error) {
+                console.error(`Error fetching ${leagueId}:`, error);
+                return [];
+            }
+        }
+
+        async function loadMatches() {
+            try {
+                document.getElementById('loading').classList.remove('d-none');
+                document.getElementById('error').classList.add('d-none');
+                document.getElementById('matchesContainer').classList.add('d-none');
+
+                allMatches = [];
+                const loadingText = document.querySelector('#loading p');
+                let loadedCount = 0;
+                const totalLeagues = Object.keys(LEAGUES).length;
+
+                // Fetch all leagues with progress indication
+                const fetchPromises = Object.entries(LEAGUES).map(async ([leagueId, leagueName]) => {
+                    const matches = await fetchLeagueMatches(leagueId, leagueName);
+                    allMatches.push(...matches);
+                    loadedCount++;
+                    loadingText.textContent = `Loading leagues... ${loadedCount}/${totalLeagues}`;
+                });
+
+                await Promise.all(fetchPromises);
+                
+                // Sort matches by time
+                allMatches.sort((a, b) => new Date(a.time) - new Date(b.time));
+                
+                // Update last updated time
+                document.getElementById('lastUpdated').textContent = `Last updated: ${new Date().toLocaleString()}`;
+                
+                // Display matches
+                displayMatches();
+                
+                document.getElementById('loading').classList.add('d-none');
+                document.getElementById('matchesContainer').classList.remove('d-none');
+                
+            } catch (error) {
+                console.error('Error loading matches:', error);
+                document.getElementById('loading').classList.add('d-none');
+                document.getElementById('error').classList.remove('d-none');
+            }
+        }
+
+        function displayMatches() {
+            const container = document.getElementById('matchesContainer');
+            
+            // Filter matches based on current filter
+            let filteredMatches = allMatches;
+            
+            switch(currentFilter) {
+                case 'top':
+                    filteredMatches = allMatches.filter(match => 
+                        TOP_LEAGUES.includes(match.league)
+                    );
+                    break;
+                case 'live':
+                    filteredMatches = allMatches.filter(match => 
+                        !match.completed && (match.status.includes('In Progress') || match.status.includes('Live'))
+                    );
+                    break;
+                case 'recent':
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    filteredMatches = allMatches.filter(match => 
+                        new Date(match.time) >= yesterday
+                    );
+                    break;
+            }
+            
+            if (filteredMatches.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No matches found</h5>
+                        <p class="text-muted">No matches available for the selected filter.</p>
+                        <small class="text-muted">Total matches loaded: ${allMatches.length}</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group matches by league
+            const matchesByLeague = {};
+            filteredMatches.forEach(match => {
+                if (!matchesByLeague[match.league]) {
+                    matchesByLeague[match.league] = [];
+                }
+                matchesByLeague[match.league].push(match);
+            });
+            
+            let html = '';
+            
+            // Display each league section
+            Object.keys(matchesByLeague).sort().forEach(league => {
+                const matches = matchesByLeague[league];
+                
+                html += `
+                    <div class="league-section">
+                        <div class="league-header">
+                            <h4 class="mb-0">
+                                <i class="fas fa-trophy me-2 text-warning"></i>
+                                ${league}
+                                <span class="badge bg-secondary ms-2">${matches.length}</span>
+                            </h4>
+                        </div>
+                        <div class="row">
+                `;
+                
+                matches.forEach(match => {
+                    const statusClass = match.completed ? 'success' : 
+                                      (match.status.includes('In Progress') || match.status.includes('Live')) ? 'warning' : 'info';
+                    const statusText = match.completed ? 'Final' : 
+                                     (match.status.includes('In Progress') || match.status.includes('Live')) ? 'Live' : match.status;
+                    
+                    html += `
+                        <div class="col-lg-6 col-xl-4 mb-3">
+                            <div class="card h-100 match-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-calendar-alt me-1"></i>
+                                            ${new Date(match.time).toLocaleDateString()} ${new Date(match.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                        </h6>
+                                        <span class="badge bg-${statusClass}">${statusText}</span>
+                                    </div>
+                                    
+                                    <div class="teams-section">
+                                        <div class="team-row d-flex justify-content-between align-items-center mb-2">
+                                            <div class="team-info">
+                                                <strong>${match.team1}</strong>
+                                            </div>
+                                            <div class="score">
+                                                <span class="badge bg-secondary fs-6">${match.score.split(' - ')[0]}</span>
+                                            </div>
+                                        </div>
+                                        <div class="team-row d-flex justify-content-between align-items-center mb-3">
+                                            <div class="team-info">
+                                                <strong>${match.team2}</strong>
+                                            </div>
+                                            <div class="score">
+                                                <span class="badge bg-secondary fs-6">${match.score.split(' - ')[1]}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    ${match.venue && match.venue !== 'TBD' ? `
+                                        <small class="text-muted d-block mb-2">
+                                            <i class="fas fa-map-marker-alt me-1"></i>
+                                            ${match.venue}
+                                        </small>
+                                    ` : ''}
+
+                                    <div class="mt-auto">
+                                        <a href="${match.link}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-external-link-alt me-1"></i>
+                                            View on ESPN
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Filter functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            
+            filterButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    currentFilter = this.getAttribute('data-filter');
+                    
+                    // Update active button
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Re-display matches with new filter
+                    displayMatches();
+                });
+            });
+            
+            // Load matches on page load
+            loadMatches();
+        });
+
+        // Auto-refresh every 10 minutes
+        setInterval(loadMatches, 600000);
+        
+        // Manual refresh function
+        window.refreshMatches = loadMatches;
+    </script>
+</body>
+</html>
